@@ -26,8 +26,8 @@ Z0 = efit.Zaxis;
 B0 = efit.B0EXP;
 
 scheme = 12;
-[R, ~, ddR, d2dR2] = m20121125_04_DifferentiationMatricesForUniformGrid(efit.nrbox, efit.rboxleft, efit.rboxleft+efit.rboxlength, scheme);
-[Z, ~, ddZ, d2dZ2] = m20121125_04_DifferentiationMatricesForUniformGrid(efit.nzbox, -efit.zboxlength/2, efit.zboxlength/2, scheme);
+[R, ~, ddR, d2dR2] = differentiationMatricesForUniformGrid(efit.nrbox, efit.rboxleft, efit.rboxleft+efit.rboxlength, scheme);
+[Z, ~, ddZ, d2dZ2] = differentiationMatricesForUniformGrid(efit.nzbox, -efit.zboxlength/2, efit.zboxlength/2, scheme);
 
 [R2D, Z2D] = meshgrid(R, Z);
 theta = atan2(Z2D - efit.Zaxis, R2D-efit.Raxis);

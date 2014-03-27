@@ -16,8 +16,8 @@ function tokamakDriftKineticEquationSolver()
 % conductivity. Specifically, it computes the quantities L_31, L_32, L_34, 
 % alpha, and sigma_neo / sigma_Spitzer defined by equations (5)-(6) in
 % Sauter, Angioni, and Lin-Liu, Phys Plasmas 6 (1999).
-% This program also computes the neoclassical ion conductivity, defined by
-% eq (5) in
+% This program also computes the neoclassical ion thermal conductivity, 
+% i.e. k_q in eq (5) in
 % Landreman & Ernst, Plasma Phys Controlled Fusion 54, 115006 (2012).
 % Notice the ion flow coefficient k_|| in eq (6) of this paper is equal 
 % to -alpha from the Sauter paper.
@@ -147,10 +147,10 @@ nuStar = nuPrime * (Miller_A^1.5);
 % Number of Fourier modes in the poloidal angle.
 % Memory and time requirements do depend strongly on this parameter.  The
 % value of Ntheta required for numerical convergence depends strongly on
-% collisionality. At high collisionality, Nxi = 5 might be plenty. At nu* =
-% 10^{-3}, Nxi > 30 may be required.
+% collisionality. At high collisionality, Ntheta = 5 might be plenty. At nu* =
+% 10^{-3}, Ntheta > 30 may be required.
 NthetaConverged = 8;
-Nthetas = floor(linspace(5,15,5));
+Nthetas = floor(linspace(7,15,5));
 
 % Number of Legendre modes retained for the Rosenbluth potentials.
 % The memory and time requirements are not very sensitive to this
@@ -192,6 +192,7 @@ log10tols = 4.5:0.5:5;
 
 %tryIterativeSolvers = true;
 tryIterativeSolvers = false;
+% If false, the sparse direct solver will be used.
 
 tryDirectSolverIfIterativeSolversFail = true;
 %tryDirectSolverIfIterativeSolversFail = false;
@@ -357,12 +358,13 @@ switch runMode
         Nxs =         [ 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 7, 7, 7, 7, 7, 7, 7, 7];
         %               ^           ^           ^           ^           ^
         
-        %{
+        % Comment out these next 4 lines if you want a higher resolution
+        % scan.
         nuStars = nuStars(1:4:end);
         Nthetas = Nthetas(1:4:end);
         Nxis = Nxis(1:4:end);
         Nxs = Nxs(1:4:end);
-        %}
+        
         
         NthetaMultipliers = [1, 2, 1, 1];
         NxiMultipliers    = [1, 1, 2, 1];
@@ -776,7 +778,7 @@ end
         
         
         if plotVelocitySpaceGrid
-            if iteration == 1
+            if speedGridFigureHandle == 0
                 speedGridFigureHandle = figure(figureOffset+7);
             else
                 set(0, 'CurrentFigure', speedGridFigureHandle);
@@ -1120,7 +1122,7 @@ end
         % *******************************************
         
         if tryIterativeSolvers
-            if iteration==1
+            if KrylovFigureHandle == 0
                 KrylovFigureHandle = figure(3 + figureOffset);
             else
                 set(0, 'CurrentFigure', KrylovFigureHandle);
