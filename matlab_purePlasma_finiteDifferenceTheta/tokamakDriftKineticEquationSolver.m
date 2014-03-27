@@ -16,14 +16,14 @@ function tokamakDriftKineticEquationSolver()
 % conductivity. Specifically, it computes the quantities L_31, L_32, L_34, 
 % alpha, and sigma_neo / sigma_Spitzer defined by equations (5)-(6) in
 % Sauter, Angioni, and Lin-Liu, Phys Plasmas 6 (1999).
-% This program also computes the neoclassical ion thermal conductivity, 
-% i.e. k_q in eq (5) in
+% This program also computes the neoclassical ion conductivity, defined by
+% eq (5) in
 % Landreman & Ernst, Plasma Phys Controlled Fusion 54, 115006 (2012).
 % Notice the ion flow coefficient k_|| in eq (6) of this paper is equal 
 % to -alpha from the Sauter paper.
 
 % Discretizations used in this version:
-% theta: Fourier modal expansion
+% theta: finite differences or Fourier spectral collocation (see the 'thetaGridMode' input parameter.)
 % xi (cosine of pitch angle): Legendre modal expansion
 % x (speed / thermal speed): spectral collocation
 
@@ -44,7 +44,7 @@ runMode = 0;
 %     does not take significant time.
 
 % The following parameter specifies the file to plot when runMode = 3:
-dataFileToPlot = 'tokamakDriftKineticEquationSolver_2014-03-27_14-15_foobar.mat';
+dataFileToPlot = 'tokamakDriftKineticEquationSolver_2014-03-27_18-24_foobar.mat';
 
 % The switch below determines whether an output file is created when runMode = 2:
 saveStuff = true;
@@ -95,7 +95,7 @@ desiredPsi = 0.7;
 species = 0;
 % 0 for ions
 % 1 for electrons
-% For runMode = 2, the value of 'species' here is ignored, and both ion and electron equations are solved.
+% For runMode=2, the value of 'species' here is ignored, and both ion and electron equations are solved.
 
 % Z is the ion charge, which (paradoxically perhaps) matters in the code
 % only when species = 1.
@@ -155,13 +155,13 @@ nuStar = nuPrime * (Miller_A^1.5);
 % For each pair of variables below, the first is the value used in a single run.
 % The second is the set of values used in a convergence scan.
 
-% Number of Fourier modes in the poloidal angle.
+% Number of grid points in the poloidal angle.
 % Memory and time requirements do depend strongly on this parameter.  The
 % value of Ntheta required for numerical convergence depends strongly on
 % collisionality. At high collisionality, Ntheta = 5 might be plenty. At nu* =
-% 10^{-3}, Ntheta > 30 may be required.
-NthetaConverged = 8;
-Nthetas = floor(linspace(7,15,5));
+% 10^{-3}, Ntheta > 60 may be required.
+NthetaConverged = 17;
+Nthetas = floor(linspace(13,31,7));
 
 % Number of Legendre modes retained for the Rosenbluth potentials.
 % The memory and time requirements are not very sensitive to this
@@ -196,10 +196,23 @@ NxPotentialsPerVths = [40, 81];
 log10tolConverged = 5.0;
 log10tols = 4.5:0.5:5;
 
-
 %******************************************************************
 % Other numerical parameters:
 %******************************************************************
+
+% The following parameter should usually be 2.
+thetaGridMode = 2;
+thetaGridModeForPreconditioner = thetaGridMode;
+% 0 = uniform periodic spectral collocation
+% 1 = finite difference, 3 point stencil
+% 2 = finite difference, 5 point stencil
+% 3 = finite difference, 7 point stencil
+
+% This next parameter should be 1 except in rare circumstances.
+forceThetaParity = 1;
+% 0 = either even or odd Ntheta is fine.
+% 1 = force Ntheta to be odd.
+% 2 = force Ntheta to be even.
 
 %tryIterativeSolvers = true;
 tryIterativeSolvers = false;
@@ -222,24 +235,14 @@ maxIterations = 100;
 % The parameter below only matters for the GMRES solver:
 restart = 100;
 
-% The switch below, if set to true, may speed the code up a tiny bit, but
-% it must be set to false when the magnetic geometry is not perfectly
-% up-down symmetric. Since the gain is minimal from setting this parameter
-% to true, I'd recommend keeping it false to be safe.
-%zeroModesWithWrongParity = true;
-zeroModesWithWrongParity = false;
-
-% The parameter below may have some effect on the memory required to
-% factorize the matrix, but in practice it doesn't seem to make much
-% difference.
-whereToPutbDotGradTheta = 1;
-% 0 = my traditional form of the DKE, with b dot grad theta on the
-% collision term but not streaming or mirror terms: this makes the
-% streaming term diagonal in M but makes the collision term dense in M.
-
-% 1 = put the b dot grad theta on the streaming and mirror terms. This
-% makes the collision term diagonal in M but makes the streaming term dense
-% in M.
+% If the following parameter is true, 2 extra rows are added to the linear
+% system to force all the flux-surface-averaged density and pressure to be
+% in f_Maxwellian instead of in f_1. Two extra columns are also added
+% (associated with Lagrange multipliers) so the linear system remains
+% square.  It seems to make little difference whether or not these
+% constraints are included.
+%includeConstraints = true;
+includeConstraints = false;
 
 %******************************************************************
 % Switches for plotting:
@@ -258,21 +261,19 @@ plotEFITDetails = true;
 %plotPoloidalVariationOfFlow = true;
 plotPoloidalVariationOfFlow = false;
 
-% ***********************************************
-% ***********************************************
+%******************************************************************
+%******************************************************************
 %
 % End of the main input parameters
 %
-% ***********************************************
-% ***********************************************
+%******************************************************************
+%******************************************************************
 
 speedGridFigureHandle = 0;
 KrylovFigureHandle = 0;
 
 if geometry==2 && runMode ~= 3
     % Load EFIT data
-    
-    zeroModesWithWrongParity = false;
     
     NPsi=1;
     psi = desiredPsi;
@@ -361,9 +362,9 @@ switch runMode
         
         NxPotentialsPerVth = NxPotentialsPerVthConverged;
         tol = 10^(-log10tolConverged);
-
+        
         nuStars = 10.^(2:(-0.25):(-3));
-        Nthetas =     [ 8, 8, 8, 8, 8, 8, 8, 8, 8, 9,10,11,12,13,14,15,25,32,32,32,32];
+        Nthetas =     [ 8, 8, 8, 8, 8, 8, 8, 8, 8, 9,10,11,12,13,14,15,25,32,32,32,32]*2;
         Nxis =        [15,15,15,15,15,15,15,15,15,28,28,35,46,55,60,64,85,100,140,140,140];
         Nxs =         [ 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 7, 7, 7, 7, 7, 7, 7, 7];
         %               ^           ^           ^           ^           ^
@@ -374,7 +375,7 @@ switch runMode
         Nthetas = Nthetas(1:4:end);
         Nxis = Nxis(1:4:end);
         Nxs = Nxs(1:4:end);
-                
+        
         NthetaMultipliers = [1, 2, 1, 1];
         NxiMultipliers    = [1, 1, 2, 1];
         NxMultipliers     = [1, 1, 1, 2];
@@ -661,7 +662,7 @@ switch runMode
             otherwise
                 error('Program should not get here')
         end
-        stringForTop=sprintf('%s, %s, aspect ratio = %g, nuPrime = %g, nu_* = %g, theta modal, Legendre modal, polynomial colocation in x',speciesText,geometryText,Miller_A, nuPrime,nuStar);
+        stringForTop=sprintf('%s, %s, aspect ratio = %g, nuPrime = %g, nu_* = %g, thetaGridMode = %d, Legendre modal, polynomial colocation in x',speciesText,geometryText,Miller_A, nuPrime,nuStar,thetaGridMode);
         annotation('textbox',[0 0.95 1 .05],'HorizontalAlignment','center',...
             'Interpreter','none','VerticalAlignment','bottom',...
             'FontSize',10,'LineStyle','none','String',stringForTop);
@@ -702,7 +703,8 @@ switch runMode
             'Interpreter','none','VerticalAlignment','top',...
             'FontSize',10,'LineStyle','none','String', ...
             stringForBottom);
-
+        
+        
         
         fprintf('XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n')
         fprintf('Total elapsed time: %g seconds.\n',etime(clock,startTime))
@@ -711,58 +713,114 @@ switch runMode
         error('Unrecognized runMode')
 end
 
+
+
+
+
+
+
+
+
+
+
+% **************************************************************
+% **************************************************************
+%
+% Start of main function to solve the kinetic equation
+%
+% **************************************************************
+% **************************************************************
+
+
     function solveDKE()
-        
         
         startTimeForThisRun=tic;
         
         sqrtpi=sqrt(pi);
         iteration = iteration+1;
         
-        
         % Order of the rows of the matrix and of the RHS:
         % --------------------------------
-        % for x = dx to xMax-dx  (Nx points)
-        %   for L = 0:(NL-1)
-        %     for M = 0:(Ntheta-1)
-        %       Real part of the DKE (equivalent to -M)
-        %     for M = 1:(Ntheta-1)
-        %       Imag part of the DKE
-        
-        % Order of the cols of the matrix and of the soln:
-        % --------------------------------
-        % for x = dx to xMax-dx  (Nx points)
-        %   for l = 0:(NL-1)
-        %     for m = 0:(Ntheta-1)
-        %       Real part of f_(l,m)
-        %     for m = 1:(Ntheta-1)
-        %       Imag part of f_(l,m)
-        
+        % Loop over x grid
+        %   Loop over Legendre polynomials
+        %     Loop over theta grid
+        %       Enforce the drift-kinetic equation
+        % <n_1> = 0 (if desired)
+        % <p_1> = 0 (if desired)
+
+        switch forceThetaParity
+            case 0
+                % Do nothing
+            case 1
+                % Force Ntheta to be odd
+                if mod(Ntheta,2)==0
+                    Ntheta=Ntheta+1;
+                end
+            case 2
+                % Force Ntheta to be even
+                if mod(Ntheta,2)==1
+                    Ntheta=Ntheta+1;
+                end
+            otherwise
+                error('Invalid forceThetaParity')
+        end
         
         fprintf('Ntheta = %d,  NL = %d,  Nxi = %d,  Nx = %d, NxPtentialsPerVth = %g, tol = %g\n',Ntheta,NL,Nxi,Nx,NxPotentialsPerVth,tol)
         
         tic
         
-        % NOTE: Ntheta is the number of MODES in theta.
-        % The number of grid points in theta is 2*Ntheta.
-        
-        theta = linspace(0, 2*pi, 2*Ntheta+1);
-        theta(end)=[];
+        % Generate abscissae, quadrature weights, and derivative matrix for theta grid.
+        switch thetaGridMode
+            case 0
+                % Spectral uniform
+                scheme = 20;
+            case 1
+                % Uniform periodic 2nd order FD
+                scheme = 0;
+            case 2
+                % Uniform periodic 4th order FD
+                scheme = 10;
+            case 3
+                % Uniform periodic FD, 7 point stencil
+                scheme = 70;
+            otherwise
+                error('Error! Invalid thetaGridMode')
+        end
+        [theta, thetaWeights, ddtheta, ~] = differentiationMatricesForUniformGrid(Ntheta, 0, 2*pi, scheme);
+        theta = theta';
+        thetaWeights = thetaWeights';
         
         bs=b(theta);
         oneOverqRbDotGradThetas = oneOverqRbDotGradTheta(theta);
         if geometry==1
             % Miller: too hard to analytically differentiate b(theta) so do
             % it numerically:
-            thetaMin=0;
-            thetaMax = 2*pi;
-            [thetaFine, ddthetaFine, NthetaFinal] = makeUniformSpectralDifferentiationMatrix(2*Ntheta*dBdthetaResolutionMultiplier, thetaMin, thetaMax);
-            thetaFine = circshift(thetaFine, [0,1]);
-            dbdthetaFine = ddthetaFine * b(thetaFine)';
+            scheme = 20;
+            [thetaFine, ~, ddthetaFine, ~] = m20121125_04_DifferentiationMatricesForUniformGrid(Ntheta*dBdthetaResolutionMultiplier, 0, 2*pi, scheme);
+            dbdthetaFine = ddthetaFine * b(thetaFine);
             dbdthetas = dbdthetaFine(1:dBdthetaResolutionMultiplier:end)';
         else
             dbdthetas = dbdtheta(theta);
         end
+        
+        switch thetaGridModeForPreconditioner
+            case 0
+                % Spectral uniform
+                scheme = 20;
+            case 1
+                % Uniform periodic 2nd order FD
+                scheme = 0;
+            case 2
+                % Uniform periodic 4th order FD
+                scheme = 10;
+            case 3
+                % Uniform periodic FD, 7 point stencil
+                scheme = 70;
+            otherwise
+                error('Error! Invalid thetaGridMode')
+        end
+        [~, ~, ddthetaForPreconditioner, ~] = differentiationMatricesForUniformGrid(Ntheta, 0, 2*pi, scheme);
+        
         
         % Generate abscissae, quadrature weights, and derivative matrix for x grid.
         kk=0;
@@ -778,7 +836,7 @@ end
         
         xMax=max([5, max(x_i)]);
         NxPotentials = ceil(xMax * NxPotentialsPerVth);
-        % Uniform finite differences with 5-point stencil.
+        % Uniform, higher order FD
         xMin=0;
         scheme = 12;
         [xPotentials, ~, ddxPotentials, d2dx2Potentials] = differentiationMatricesForUniformGrid(NxPotentials, xMin, xMax, scheme);
@@ -800,47 +858,31 @@ end
             ylabel('Solve number')
         end
         
-        thetaGridSize = (Ntheta*2-1);
-        matrixSize = thetaGridSize * Nx * Nxi;
-        estimated_nnz = ceil(1.1*((nnz(generateThetaMultiplicationMatrix(bs, 1e-7))+nnz(generateThetaMultiplicationMatrix(oneOverqRbDotGradThetas, 1e-7)))*4*Nxi*Nx + thetaGridSize*(NL*Nx*Nx + Nxi*Nx*Nx)));
-        fprintf('matrixSize: %d.\n',matrixSize)
-        
-        isModeAllowedSmall = zeros(1,thetaGridSize*Nxi);
-        evens = [ones(1,Ntheta), zeros(1,Ntheta-1)];
-        odds = 1-evens;
-        for L=0:(Nxi-1)
-            indices = L*thetaGridSize + (1:thetaGridSize);
-            if mod(L,2)==0
-                isModeAllowedSmall(indices) = odds;
-            else
-                isModeAllowedSmall(indices) = evens;
-            end
+        matrixSize = Ntheta * Nx * Nxi;
+        if includeConstraints
+            matrixSize = matrixSize + 2;
         end
-        isModeAllowedVector = repmat(isModeAllowedSmall,[1,Nx])';
-        isModeAllowed = spdiags(isModeAllowedVector, 0, matrixSize, matrixSize);
-        thisModeNotAllowed = spdiags(1-isModeAllowedVector, 0, matrixSize, matrixSize);
+        estimated_nnz = floor(1.1*(Nx*Nx*Nxi*Ntheta + 2*Nxi*nnz(ddtheta)*Nx+2*Nxi*Nx*Ntheta));
+        fprintf('matrixSize: %d.\n',matrixSize)
         
         % Begin timer for matrix construction:
         tic
         
-        
-        % *************************************
-        % *************************************
+        % *******************************************
+        % *******************************************
         %
-        % Build the right-hand side of the main linear system
+        % Build the right-hand side(s) for the linear system:
         %
-        % *************************************
-        % *************************************
+        % *******************************************
+        % *******************************************
         
         switch species
             case 0
-                % Ions
                 rhs=zeros(matrixSize,1);
             case 1
-                % Electrons
                 rhs=zeros(matrixSize,4);
             otherwise
-                error('Invalid setting for species')
+                error('Invalid setting for species');
         end
         
         % Order of columns in the RHS:
@@ -854,53 +896,39 @@ end
         xPartOfRHSForConductivity = x_i.*expx2;
         xPartOfRHSForP = x2.*expx2;
         xPartOfRHSForT = (x2-5/2).*x2.*expx2;
-        switch whereToPutbDotGradTheta
-            case 0
-                thetaPartOfRHSOnThetaGrid = dbdthetas ./ (bs.*bs);
-                thetaPartOfL34RHSOnThetaGrid = dbdthetas;
-                thetaPartOfConductivityOnThetaGrid = bs .* oneOverqRbDotGradThetas;
-            case 1
-                thetaPartOfRHSOnThetaGrid = dbdthetas ./ (bs.*bs .* oneOverqRbDotGradThetas);
-                thetaPartOfL34RHSOnThetaGrid = dbdthetas ./ oneOverqRbDotGradThetas;
-                thetaPartOfConductivityOnThetaGrid = bs;
-            otherwise
-                error('Invalid whereToPutbDotGradTheta')
-        end
         
-        complexThetaModeCoefficientsForRHS = fft(thetaPartOfRHSOnThetaGrid)/(2*Ntheta);
-        thetaModeCoefficientsForRHS = [real(complexThetaModeCoefficientsForRHS(1:Ntheta)), imag(complexThetaModeCoefficientsForRHS(2:Ntheta))];
+        thetaPartOfRHS = dbdthetas ./ (bs.*bs);
+        thetaPartOfL34RHS = dbdthetas;
+        thetaPartOfConductivityRHS = bs .* oneOverqRbDotGradThetas;
         
-        complexThetaModeCoefficientsForRHS = fft(thetaPartOfL34RHSOnThetaGrid)/(2*Ntheta);
-        thetaModeCoefficientsForL34RHS = [real(complexThetaModeCoefficientsForRHS(1:Ntheta)), imag(complexThetaModeCoefficientsForRHS(2:Ntheta))];
         
-        complexThetaModeCoefficientsForRHS = fft(thetaPartOfConductivityOnThetaGrid)/(2*Ntheta);
-        thetaModeCoefficientsForConductivityRHS = [real(complexThetaModeCoefficientsForRHS(1:Ntheta)), imag(complexThetaModeCoefficientsForRHS(2:Ntheta))];
-        
-        for itheta=1:thetaGridSize
+        for itheta=1:Ntheta
             L=0;
-            indices = ((1:Nx)-1)*Nxi*thetaGridSize + L*thetaGridSize + itheta;
-            rhs(indices,1) = 0.5 * (4/3) * thetaModeCoefficientsForRHS(itheta) * xPartOfRHSForT;
+            indices = ((1:Nx)-1)*Nxi*Ntheta + L*Ntheta + itheta;
+            rhs(indices,1) = 0.5 * (4/3) * thetaPartOfRHS(itheta) * xPartOfRHSForT;
+            
             if species ~= 0
-                rhs(indices,2) = 0.5 * (4/3) * thetaModeCoefficientsForRHS(itheta) * xPartOfRHSForP;
+                rhs(indices,2) = 0.5 * (4/3) * thetaPartOfRHS(itheta) * xPartOfRHSForP;
                 
                 L=1;
-                indices = ((1:Nx)-1)*Nxi*thetaGridSize + L*thetaGridSize + itheta;
-                rhs(indices,4) = thetaModeCoefficientsForConductivityRHS(itheta) * xPartOfRHSForConductivity;
+                indices = ((1:Nx)-1)*Nxi*Ntheta + L*Ntheta + itheta;
+                rhs(indices,4) = thetaPartOfConductivityRHS(itheta) * xPartOfRHSForConductivity;
             end
             
             L=2;
-            indices = ((1:Nx)-1)*Nxi*thetaGridSize + L*thetaGridSize + itheta;
-            rhs(indices,1) = 0.5 * (2/3) * thetaModeCoefficientsForRHS(itheta) * xPartOfRHSForT;
+            indices = ((1:Nx)-1)*Nxi*Ntheta + L*Ntheta + itheta;
+            rhs(indices,1) = 0.5 * (2/3) * thetaPartOfRHS(itheta) * xPartOfRHSForT;
+            
             if species ~= 0
-                rhs(indices,2) = 0.5 * (2/3) * thetaModeCoefficientsForRHS(itheta) * xPartOfRHSForP;
-                rhs(indices,3) = thetaModeCoefficientsForL34RHS(itheta) * xPartOfRHSForP;
+                rhs(indices,2) = 0.5 * (2/3) * thetaPartOfRHS(itheta) * xPartOfRHSForP;
+                rhs(indices,3) = thetaPartOfL34RHS(itheta) * xPartOfRHSForP;
             end
         end
         
         % *************************************
         % *************************************
         %
-        % Build the main matrix
+        % Build the main matrix:
         %
         % *************************************
         % *************************************
@@ -910,9 +938,6 @@ end
         sparseCreator_j=0;
         sparseCreator_s=0;
         resetSparseCreator()
-        
-        Ms = 0:(Ntheta-1);
-        ddtheta = -diag(Ms, Ntheta-1) + diag(Ms, 1-Ntheta);
         
         if tryIterativeSolvers
             matricesToMake=1:2;
@@ -924,59 +949,37 @@ end
             % 1 = main matrix
             % 2 = preconditioner
             
-            switch whichMatrixToMake
-                case 1
-                    threshhold=1e-7;
-                case 2
-                    threshhold=1e-7;
+            if whichMatrixToMake==1
+                ddthetaForThisMatrix = ddtheta;
+            else
+                ddthetaForThisMatrix = ddthetaForPreconditioner;
             end
-            switch whereToPutbDotGradTheta
-                case 0
-                    % 1/(b dot grad theta) multiplies collision term,
-                    % simpler streaming term
-                    thetaPartOfMirrorTermOnThetaGrid = -0.5*dbdthetas ./ (bs);
-                    thetaPartMatrixForCollisionTerm = generateThetaMultiplicationMatrix(oneOverqRbDotGradThetas, threshhold);
-                    thetaPartMatrixForStreamingTerm = ddtheta;
-                case 1
-                    % (b dot grad theta) multiplies streaming and mirror terms,
-                    % simpler collision term
-                    thetaPartOfMirrorTermOnThetaGrid = -0.5*dbdthetas ./ (bs .* oneOverqRbDotGradThetas);
-                    thetaPartOfStreamingTermOnThetaGrid = 1./(oneOverqRbDotGradThetas);
-                    thetaPartMatrixForStreamingTerm = generateThetaMultiplicationMatrix(thetaPartOfStreamingTermOnThetaGrid, threshhold) * ddtheta;
-                otherwise
-                    error('Invalid whereToPutbDotGradTheta')
-            end
-            thetaPartMatrixForMirrorTerm = generateThetaMultiplicationMatrix(thetaPartOfMirrorTermOnThetaGrid, threshhold);
             
             matrixStartTime = tic;
             
-            % ***************************************
-            % Add the streaming and mirror terms:
-            % ***************************************
+            thetaPartOfMirrorTerm = -0.5*dbdthetas./bs;
             for ix=1:Nx
                 
                 x=x_i(ix);
                 for L=0:(Nxi-1)
-                    rowIndices = (ix-1)*Nxi*thetaGridSize + L*thetaGridSize + (1:thetaGridSize);
+                    rowIndices = (ix-1)*Nxi*Ntheta + L*Ntheta + (1:Ntheta);
                     
-                    % super-diagonals in L: (streaming & mirror terms)
-                    if L<(Nxi-1)
-                        colIndices = rowIndices + thetaGridSize;
+                    % super-diagonals: (streaming & mirror terms)
+                    if L<(Nxi-1) 
+                        colIndices = rowIndices + Ntheta;
                         % Streaming term
-                        addSparseBlock(rowIndices, colIndices, thetaPartMatrixForStreamingTerm*x*(L+1)/(2*L+3));
-                        
+                        addSparseBlock(rowIndices, colIndices, x*ddthetaForThisMatrix*(L+1)/(2*L+3));
                         % Mirror term
-                        addSparseBlock(rowIndices, colIndices, thetaPartMatrixForMirrorTerm*x*(L+1)*(L+2)/(2*L+3));
+                        addToSparse(rowIndices, colIndices, x*thetaPartOfMirrorTerm*(L+1)*(L+2)/(2*L+3));
                     end
                     
-                    % Sub-diagonals in L: (streaming & mirror terms)
+                    % Sub-diagonals: (streaming & mirror terms)
                     if L>0
-                        colIndices = rowIndices - thetaGridSize;
+                        colIndices = rowIndices - Ntheta;
                         % Streaming term
-                        addSparseBlock(rowIndices, colIndices, thetaPartMatrixForStreamingTerm*x*L/(2*L-1));
-                        
+                        addSparseBlock(rowIndices, colIndices, x*ddthetaForThisMatrix*L/(2*L-1));
                         % Mirror term
-                        addSparseBlock(rowIndices, colIndices, -thetaPartMatrixForMirrorTerm*x*(L-1)*L/(2*L-1));
+                        addToSparse(rowIndices, colIndices, -x*thetaPartOfMirrorTerm*(L-1)*L/(2*L-1));
                     end
                 end
             end
@@ -986,7 +989,7 @@ end
             % For a detailed explanation of the implementation of the collision operator, see
             % Landreman & Ernst, Journal of Computational Physics 243, 130 (2013)
             % ***************************************
-            
+
             xWith0s = [0; xPotentials(2:(end-1)); 0];
             M21 = 4*pi*diag(xWith0s.^2) * regridPolynomialToUniform;
             M32 = -2*diag(xWith0s.^2);
@@ -1051,56 +1054,55 @@ end
                 else
                     KWithoutThetaPart = M11;
                 end
-                if whichMatrixToMake == 2
+                if whichMatrixToMake == 2 
                     % For preconditioner, drop all terms that are
                     % off-diagonal in x.
                     KWithoutThetaPart = diag(diag(KWithoutThetaPart));
                 end
                 
-                switch whereToPutbDotGradTheta
-                    case 0
-                        
-                        % 1/(b dot grad theta) multiplies collision term.
-                        for ithetaRow=1:thetaGridSize
-                            rowIndices = ((1:Nx)-1)*Nxi*thetaGridSize + L*thetaGridSize + ithetaRow;
-                            for ithetaCol = 1:thetaGridSize
-                                colIndices = ((1:Nx)-1)*Nxi*thetaGridSize + L*thetaGridSize + ithetaCol;
-                                addSparseBlock(rowIndices, colIndices, KWithoutThetaPart*thetaPartMatrixForCollisionTerm(ithetaRow,ithetaCol))
-                            end
-                        end
-                        
-                    case 1
-                        % Simpler collision term
-                        for itheta=1:thetaGridSize
-                            indices = ((1:Nx)-1)*Nxi*thetaGridSize + L*thetaGridSize + itheta;
-                            addSparseBlock(indices, indices, KWithoutThetaPart)
-                        end
-                    otherwise
-                        error('Invalid whereToPutbDotGradTheta')
+                for itheta=1:Ntheta
+                    indices = ((1:Nx)-1)*Nxi*Ntheta + L*Ntheta + itheta;
+                    addSparseBlock(indices, indices, KWithoutThetaPart*oneOverqRbDotGradThetas(itheta))
                 end
             end
+            
+            if includeConstraints
+                L=0;
+                for ix=1:Nx
+                    rowIndices = (ix-1)*Nxi*Ntheta + L*Ntheta + (1:Ntheta);
+
+                    colIndex = matrixSize-1;
+                    addSparseBlock(rowIndices, colIndex, expx2(ix)*ones(Ntheta,1))
+                    colIndex = matrixSize;
+                    addSparseBlock(rowIndices, colIndex, expx2(ix)*x2(ix)*ones(Ntheta,1))
+                end
+                
+                thetaPartOfConstraint = thetaWeights .* oneOverqRbDotGradThetas ./ bs;
+                xPartOfDensityConstraint = xWeights;
+                xPartOfPressureConstraint = xWeights .* x2;
+                for ix=1:Nx
+                    colIndices = (ix-1)*Nxi*Ntheta + L*Ntheta + (1:Ntheta);
+                    
+                    rowIndex = matrixSize-1;
+                    addSparseBlock(rowIndex, colIndices, xPartOfDensityConstraint(ix)*thetaPartOfConstraint)
+                    rowIndex = matrixSize;
+                    addSparseBlock(rowIndex, colIndices, xPartOfPressureConstraint(ix)*thetaPartOfConstraint)
+                end
+            end
+            
             switch whichMatrixToMake
                 case 1
                     fprintf('Time to contruct main matrix: %g seconds.\n',toc(matrixStartTime))
                     tic
-                    if zeroModesWithWrongParity
-                        matrix = isModeAllowed * createSparse() * isModeAllowed + thisModeNotAllowed;
-                    else
-                        matrix = createSparse();
-                    end
+                    matrix = createSparse();
                     fprintf('Time to sparsify main matrix: %g seconds.\n',toc)
                 case 2
                     fprintf('Time to contruct preconditioner: %g seconds.\n',toc(matrixStartTime))
                     tic
-                    if zeroModesWithWrongParity
-                        preconditionerMatrix = isModeAllowed * createSparse() * isModeAllowed + thisModeNotAllowed;
-                    else
-                        preconditionerMatrix = createSparse();
-                    end
+                    preconditionerMatrix = createSparse();
                     fprintf('Time to sparsify preconditioner: %g seconds.\n',toc)
             end
         end
-        
         
         
         % *****************************
@@ -1117,7 +1119,7 @@ end
         end
         
         
-        function solnVector = preconditioner(rhsVector)
+        function solnVector=preconditioner(rhsVector)
             solnVector = preconditioner_Q * (preconditioner_U \ (preconditioner_L \ (preconditioner_P * rhsVector)));
         end
         
@@ -1141,134 +1143,220 @@ end
             = solveLinearSystem(matrix, rhs, @preconditioner, ...
             tryIterativeSolvers, orderOfSolversToTry, tol, maxIterations, restart, ...
             0, tryDirectSolverIfIterativeSolversFail);
+
+        %{
+        timeWhenSolveStarted = tic;
         
+        if ~tryIterativeSolvers
+            
+            fprintf('Direct solution\n')
+            soln = matrix \ rhs;
+            
+        else
+            % Use an iterative Krylov-space solver.
+            
+            soln = zeros(size(rhs));
+            numCols = size(rhs,2);
+            
+            for col=1:numCols
+                attempt=0;
+                keepTrying = true;
+                x0 = zeros(matrixSize,1);
+                while keepTrying
+                    attempt = attempt+1;
+                    tic
+                    switch solutionMethod(attempt)
+                        case 1
+                            solverName = 'GMRES';
+                            fprintf('GMRES solution ***********\n')
+                            [soln0,fl0,rr0,it0,rv0]=gmres(matrix,rhs(:,col),restart,tol,maxIterations/restart,@preconditioner, [], x0);
+                        case 2
+                            solverName = 'BiCGStab';
+                            fprintf('BiCGStab solution ***********\n')
+                            [soln0,fl0,rr0,it0,rv0]=bicgstab(matrix,rhs(:,col),tol,maxIterations,@preconditioner, [], x0);
+                        case 3
+                            solverName = 'BiCGStab(l)';
+                            fprintf('BiCGStab(l) solution ***********\n')
+                            [soln0,fl0,rr0,it0,rv0]=bicgstabl(matrix,rhs(:,col),tol,maxIterations,@preconditioner, [], x0);
+                        case 4
+                            solverName = 'TFQMR';
+                            fprintf('TFQMR solution ***********\n')
+                            [soln0,fl0,rr0,it0,rv0]=tfqmr(matrix,rhs(:,col),tol,maxIterations,@preconditioner, [], x0);
+                        case 5
+                            solverName = 'CGS';
+                            fprintf('CGS solution ***********\n')
+                            [soln0,fl0,rr0,it0,rv0]=cgs(matrix,rhs(:,col),tol,maxIterations,@preconditioner, [], x0);
+                            
+                    end
+                    fprintf('Time to solve system: %g seconds.\n',toc)
+                    switch fl0
+                        case 0
+                            fprintf('Converged!\n')
+                        case 1
+                            fprintf('Did not converge :(\n')
+                        case 2
+                            fprintf('Preconditioner was ill-conditioned\n')
+                        case 3
+                            fprintf('Stagnated :(\n')
+                    end
+                    figure(3 + figureOffset)
+                    clf
+                    semilogy(rv0/rv0(1),'-o');
+                    xlabel('Iteration number');
+                    ylabel('Relative residual');
+                    title(['Convergence of Krylov solver ',solverName]);
+                    drawnow
+                    fprintf('minimum residual: %g.\n',min(rv0)/rv0(1))
+                    if fl0==0
+                        keepTrying=false;
+                        soln(:,col) = soln0;
+                    else
+                        if attempt >= numel(solutionMethod)
+                            keepTrying=false;
+                        else
+                            x0 = soln0;
+                            fprintf('Iterative solver failed, so trying again with backup solver.\n')
+                        end
+                    end
+                end
+                
+                % If last iterative solver failed, use direct solver.
+                if fl0 ~= 0
+                    fprintf('Switching to direct solution since iterative solver(s) failed.\n')
+                    tic
+                    soln = matrix \ rhs;
+                    fprintf('Time to solve system: %g seconds.\n',toc)
+                    break
+                end
+            end
+            
+            
+        end
         
-        % ************************************************
-        % ************************************************
+        fprintf('Total time for solve: %g sec.\n',toc(timeWhenSolveStarted))
+        fprintf('Total elapsed time: %g sec.\n',toc(startTimeForThisRun))
+        assignin('base','s',soln)
+        %}
+            
+        % **********************************************
+        % **********************************************
         %
-        % Calculate moments of the distribution function:
+        % Calculate moments of the distribution function
         %
-        % ************************************************
-        % ************************************************
+        % **********************************************
+        % **********************************************
         
-        thetaMatrixForFlows = generateThetaMultiplicationMatrix(1./bs, threshhold);
-        thetaMatrixForBootstrapCoefficients = generateThetaMultiplicationMatrix(oneOverqRbDotGradThetas, threshhold);
-        
-        VPrime = quadgk(@(th) (oneOverqRbDotGradTheta(th) ./ b(th)), 0, 2*pi);
-        FSAB2 = quadgk(@(th) (oneOverqRbDotGradTheta(th) .* b(th)), 0, 2*pi) / VPrime;
-        fprintf('<B^2> = %g\n',FSAB2)
+        VPrime = (oneOverqRbDotGradTheta(theta) ./ b(theta))*thetaWeights';
         
         if species==0
             % Ions
-            
-            particleFluxBeforeZetaIntegral=zeros(thetaGridSize,1);
-            qBeforeZetaIntegral=zeros(thetaGridSize,1);
-            flowDividiedByB = zeros(thetaGridSize,1);
-            density = zeros(thetaGridSize,1);
+            particleFluxBeforeZetaIntegral=zeros(Ntheta,1);
+            qBeforeZetaIntegral=zeros(Ntheta,1);
+            flowDividedByB = zeros(1,itheta);
+            density = zeros(1,itheta);
+            pressure = zeros(1,itheta);
             
             particleFluxIntegralWeight = (x_i.^4);
             qIntegralWeight = (x_i.^6);
             kIntegralWeight = (x_i.^3);
-            densityIntegralWeight = 4*pi*(x_i.*x_i);
-            for itheta=1:thetaGridSize
+            densityIntegralWeight = 4/sqrtpi*(x_i.*x_i);
+            pressureIntegralWeight = 4/sqrtpi*(x_i.^4);
+            for itheta=1:Ntheta
                 L=0;
-                indices = ((1:Nx)-1)*Nxi*thetaGridSize + L*thetaGridSize + itheta;
-                fSlice = soln(indices,1);
+                indices = ((1:Nx)-1)*Nxi*Ntheta + L*Ntheta + itheta;
+                fSlice = soln(indices);
                 qBeforeZetaIntegral(itheta) = 8/3*xWeights*(qIntegralWeight' .* fSlice);
                 particleFluxBeforeZetaIntegral(itheta) = 8/3*xWeights*(particleFluxIntegralWeight' .* fSlice);
                 density(itheta) = xWeights*(densityIntegralWeight' .* fSlice);
+                pressure(itheta) = xWeights*(pressureIntegralWeight' .* fSlice);
                 
                 L=1;
-                indices = ((1:Nx)-1)*Nxi*thetaGridSize + L*thetaGridSize + itheta;
-                fSlice = soln(indices,1);
-                flowDividiedByB(itheta) = xWeights*(kIntegralWeight' .* fSlice);
+                indices = ((1:Nx)-1)*Nxi*Ntheta + L*Ntheta + itheta;
+                fSlice = soln(indices);
+                flowDividedByB(itheta) = xWeights*(kIntegralWeight' .* fSlice);
                 
                 L=2;
-                indices = ((1:Nx)-1)*Nxi*thetaGridSize + L*thetaGridSize + itheta;
-                fSlice = soln(indices,1);
+                indices = ((1:Nx)-1)*Nxi*Ntheta + L*Ntheta + itheta;
+                fSlice = soln(indices);
                 qBeforeZetaIntegral(itheta) = qBeforeZetaIntegral(itheta) + 4/15*xWeights*(qIntegralWeight' .* fSlice);
                 particleFluxBeforeZetaIntegral(itheta) = particleFluxBeforeZetaIntegral(itheta) + 4/15*xWeights*(particleFluxIntegralWeight' .* fSlice);
             end
-            
-            threshhold = 1e-10;
-            flowDividiedByB = 2/3*4/sqrtpi*thetaMatrixForFlows*flowDividiedByB;
-            thetaMatrixForFluxes = generateThetaMultiplicationMatrix(dbdthetas ./ (bs.*bs.*bs), threshhold);
-            qBeforeZetaIntegral = thetaMatrixForFluxes * qBeforeZetaIntegral;
-            particleFluxBeforeZetaIntegral = thetaMatrixForFluxes * particleFluxBeforeZetaIntegral;
-            k = flowDividiedByB(1) * FSAB2;
-            temp = generateThetaMultiplicationMatrix(bs .* oneOverqRbDotGradTheta(theta), threshhold) * flowDividiedByB;
-            avgVParB = (1/VPrime) * 2*pi * temp(1);
-            
-            q= sqrt(2*Miller_A/pi)/(nuPrime*VPrime) * 2*pi * qBeforeZetaIntegral(1);
-            particleFlux= sqrt(2*Miller_A/pi)/(nuPrime*VPrime) * 2*pi * particleFluxBeforeZetaIntegral(1);
+            flowDividedByB = 2/3*4/sqrtpi*flowDividedByB./bs;
+            assignin('base','fdbm',flowDividedByB)
+            qBeforeZetaIntegral = qBeforeZetaIntegral .* (dbdthetas ./ (bs.*bs.*bs))';
+            particleFluxBeforeZetaIntegral = particleFluxBeforeZetaIntegral .* (dbdthetas ./ (bs.*bs.*bs))';
+            k = 1/(2*pi)*thetaWeights * flowDividedByB';
+            avgVParB = (1/VPrime) * thetaWeights * (flowDividedByB .* bs .* oneOverqRbDotGradTheta(theta))';
+            q= sqrt(2*Miller_A/pi)/(nuPrime*VPrime) * thetaWeights * qBeforeZetaIntegral;
+            particleFlux= sqrt(2*Miller_A/pi)/(nuPrime*VPrime) * thetaWeights * particleFluxBeforeZetaIntegral;
             fprintf('Normalized radial heat flux k_q: %g\n',q)
             fprintf('Normalized radial particle flux: %g  (It should be << 1.)\n',particleFlux)
             fprintf('Parallel flow coefficient k_||: %g\n',k)
             %fprintf('Parallel flow coefficient k_||: %g,   <V_|| B>: %g\n',k, avgVParB)
-            fprintf('max non-constant mode coefficient of k_||: %g  (It should be << 1.)\n', max(abs(flowDividiedByB(2:end))))
+            fprintf('Poloidal variation of k_||: %g  (It should be << 1.)\n', max(abs(k-flowDividedByB)))
             
             if runMode==0 && plotPoloidalVariationOfFlow
                 figure(6+figureOffset)
                 clf
-                plot(flowDividiedByB)
-                xlabel('\theta mode number')
+                plot(theta,flowDividedByB)
+                xlabel('\theta')
                 ylabel('parallel flow coefficient k||')
             end
-
+            
         else
             % Electrons
             
             kIntegralWeight = (x_i.^3);
             
             % Compute L31:
-            L31BeforeThetaIntegral = zeros(thetaGridSize,1);
-            for itheta=1:thetaGridSize
+            L31BeforeThetaIntegral = zeros(Ntheta,1);
+            for itheta=1:Ntheta
                 L=1;
-                indices = ((1:Nx)-1)*Nxi*thetaGridSize + L*thetaGridSize + itheta;
+                indices = ((1:Nx)-1)*Nxi*Ntheta + L*Ntheta + itheta;
                 fSlice = soln(indices,2);
                 L31BeforeThetaIntegral(itheta) = xWeights*(kIntegralWeight' .* fSlice);
             end
             
-            L31BeforeThetaIntegral = -(4/sqrtpi)*(2/3)*2*pi/VPrime*thetaMatrixForBootstrapCoefficients*L31BeforeThetaIntegral;
-            L31 = L31BeforeThetaIntegral(1);
+            L31BeforeThetaIntegral = -(4/sqrtpi)*(2/3)/VPrime*oneOverqRbDotGradThetas'.*L31BeforeThetaIntegral;
+            L31 = thetaWeights * L31BeforeThetaIntegral;
             
             % Compute L32:
-            L32BeforeThetaIntegral = zeros(thetaGridSize,1);
-            for itheta=1:thetaGridSize
+            L32BeforeThetaIntegral = zeros(Ntheta,1);
+            for itheta=1:Ntheta
                 L=1;
-                indices = ((1:Nx)-1)*Nxi*thetaGridSize + L*thetaGridSize + itheta;
+                indices = ((1:Nx)-1)*Nxi*Ntheta + L*Ntheta + itheta;
                 fSlice = soln(indices,1);
                 L32BeforeThetaIntegral(itheta) = xWeights*(kIntegralWeight' .* fSlice);
             end
             
-            L32BeforeThetaIntegral = -(4/sqrtpi)*(2/3)*2*pi/VPrime*thetaMatrixForBootstrapCoefficients*L32BeforeThetaIntegral;
-            L32 = L32BeforeThetaIntegral(1);
+            L32BeforeThetaIntegral = -(4/sqrtpi)*(2/3)/VPrime*oneOverqRbDotGradThetas'.*L32BeforeThetaIntegral;
+            L32 = thetaWeights * L32BeforeThetaIntegral;
             
             % Compute L34:
-            L34BeforeThetaIntegral = zeros(thetaGridSize,1);
-            for itheta=1:thetaGridSize
+            L34BeforeThetaIntegral = zeros(Ntheta,1);
+            for itheta=1:Ntheta
                 L=1;
-                indices = ((1:Nx)-1)*Nxi*thetaGridSize + L*thetaGridSize + itheta;
+                indices = ((1:Nx)-1)*Nxi*Ntheta + L*Ntheta + itheta;
                 fSlice = soln(indices,3);
                 L34BeforeThetaIntegral(itheta) = xWeights*(kIntegralWeight' .* fSlice);
             end
             
-            L34BeforeThetaIntegral = (4/sqrtpi)*(2/3)*2*pi/(FSAB2*VPrime)*thetaMatrixForBootstrapCoefficients*L34BeforeThetaIntegral;
-            L34 = L34BeforeThetaIntegral(1);
+            L34BeforeThetaIntegral = (4/sqrtpi)*(2/3)/(FSAB2*VPrime)*oneOverqRbDotGradThetas'.*L34BeforeThetaIntegral;
+            L34 = thetaWeights * L34BeforeThetaIntegral;
             
             % Compute conductivity:
-            ConductivityBeforeThetaIntegral = zeros(thetaGridSize,1);
-            for itheta=1:thetaGridSize
+            ConductivityBeforeThetaIntegral = zeros(Ntheta,1);
+            for itheta=1:Ntheta
                 L=1;
-                indices = ((1:Nx)-1)*Nxi*thetaGridSize + L*thetaGridSize + itheta;
+                indices = ((1:Nx)-1)*Nxi*Ntheta + L*Ntheta + itheta;
                 fSlice = soln(indices,4);
                 ConductivityBeforeThetaIntegral(itheta) = xWeights*(kIntegralWeight' .* fSlice);
             end
             
             L11=1.9693;
-            ConductivityBeforeThetaIntegral = (nuPrime/L11)*(4/sqrtpi)*(2/3)*2*pi/(FSAB2 *VPrime) ...
-                *thetaMatrixForBootstrapCoefficients*ConductivityBeforeThetaIntegral;
-            conductivity = ConductivityBeforeThetaIntegral(1);
+            ConductivityBeforeThetaIntegral = (nuPrime/L11)*(4/sqrtpi)*(2/3)/(FSAB2 *VPrime) ...
+                *oneOverqRbDotGradThetas'.*ConductivityBeforeThetaIntegral;
+            conductivity = thetaWeights * ConductivityBeforeThetaIntegral;
             
             fprintf('L31 bootstrap current coefficient: %g\n',L31)
             fprintf('L32 bootstrap current coefficient: %g\n',L32)
@@ -1278,6 +1366,9 @@ end
         
         
         fprintf('******************** Done ********************\n')
+
+        
+        
         
         
         
@@ -1315,7 +1406,7 @@ end
             sparseCreator_s(sparseCreatorIndex:(sparseCreatorIndex+n-1)) = s;
             sparseCreatorIndex = sparseCreatorIndex+n;
             if sparseCreatorIndex > estimated_nnz
-                fprintf('Warning! estimated_nnz is too small.\n')
+                fprintf('Error! estimated_nnz is too small.\n')
             end
         end
         
@@ -1336,47 +1427,7 @@ end
             resetSparseCreator()
         end
         
-        function matrix = generateThetaMultiplicationMatrix(functionOnThetaGrid, threshhold)
-            % This function generates the matrix that corresponds to
-            % multiplication by a function of theta.
-            
-            complexAModeCoefficients = fft(functionOnThetaGrid)/(2*Ntheta);
-            
-            matrix = zeros(thetaGridSize);
-            
-            % Make top-left block of matrix:
-            toeplitzGenerator = [0, fliplr(real(complexAModeCoefficients(1:Ntheta))), real(complexAModeCoefficients(2:Ntheta))];
-            topLeftBlockBeforeMirroring = toeplitz(zeros(Ntheta,1),toeplitzGenerator);
-            matrix(1:Ntheta,1:Ntheta) = topLeftBlockBeforeMirroring(:,(Ntheta+1):end);
-            matrix(1:Ntheta, 2:Ntheta) = matrix(1:Ntheta, 2:Ntheta) + fliplr(topLeftBlockBeforeMirroring(:,2:Ntheta));
-            
-            % Make bottom-right block of matrix:
-            matrix((Ntheta+1):thetaGridSize,(Ntheta+1):thetaGridSize) = topLeftBlockBeforeMirroring(1:(Ntheta-1),(Ntheta+1):thetaGridSize) ...
-                - fliplr(topLeftBlockBeforeMirroring(1:(Ntheta-1), 1:(Ntheta-1)));
-            
-            % Make bottom-left block of matrix:
-            toeplitzGenerator = [0, fliplr(imag(complexAModeCoefficients(2:Ntheta))), 0, -imag(complexAModeCoefficients(2:Ntheta))];
-            bottomLeftBlockBeforeMirroring = toeplitz(zeros(Ntheta,1),toeplitzGenerator);
-            matrix((Ntheta+1):thetaGridSize, 1:Ntheta) = bottomLeftBlockBeforeMirroring(1:(Ntheta-1),Ntheta:thetaGridSize);
-            matrix((Ntheta+1):thetaGridSize, 2:(Ntheta-1)) = matrix((Ntheta+1):thetaGridSize, 2:(Ntheta-1)) + fliplr(bottomLeftBlockBeforeMirroring(1:(Ntheta-1),2:(Ntheta-1)));
-            
-            % Make top-right block of matrix:
-            matrix(1:Ntheta, (Ntheta+1):thetaGridSize) = -bottomLeftBlockBeforeMirroring(:,(Ntheta+2):end);
-            matrix(1:Ntheta, (Ntheta+1):thetaGridSize) = matrix(1:Ntheta, (Ntheta+1):thetaGridSize) + fliplr(bottomLeftBlockBeforeMirroring(:,2:Ntheta));
-            
-            %threshhold = 1e-7;
-            matrix(abs(matrix)<threshhold)=0;
-        end
-        
     end
-
-% *********************************************************
-% *********************************************************
-%
-% Below are several functions related to magnetic geometry.
-%
-% *********************************************************
-% *********************************************************
 
     function zz = RHat(theta)
         zz = 1 + (1/Miller_A)*cos(theta + Miller_x*sin(theta));
@@ -1448,14 +1499,6 @@ end
         end
     end
 
-% *********************************************************
-% *********************************************************
-%
-% Below are several functions related to the Sauter formulae:
-%
-% *********************************************************
-% *********************************************************
-
     function [kpar, conductivity, L31, L32, L34] = computeSauterK(nuStarsMe)
         Z = 1;
         
@@ -1489,7 +1532,6 @@ end
         
         for iNu = 1:numel(nuStarsMe)
             nuStar = sqrt(2)*nuStarsMe(iNu);
-        
             X = ft/(1 + (0.55-0.1*ft)*sqrt(nuStar) + 0.45*(1-ft)*nuStar);
             conductivity(iNu) = 1 - 1.36*X + 0.59*X*X - 0.23*X*X*X;
             
@@ -1532,16 +1574,16 @@ end
         subplot(numRows,numCols,1)
         nuStarsFine = logspace(log10(nuStars(1)), log10(nuStars(end)));
         [SauterKs, SauterConductivity, SauterL31, SauterL32, SauterL34] = computeSauterK(nuStarsFine);
-        semilogx(nuStarsFine, -SauterKs,'k')
+        semilogx(nuStarsFine, SauterKs,'k')
         hold on
-        semilogx(nuStars,-flowCoefficients(1,:),'.-')
-        semilogx(nuStars,-flowCoefficients(2,:),'.--g')
-        semilogx(nuStars,-flowCoefficients(3,:),'.-.r')
-        semilogx(nuStars,-flowCoefficients(4,:),'.:m')
+        semilogx(nuStars,flowCoefficients(1,:),'.-')
+        semilogx(nuStars,flowCoefficients(2,:),'.--g')
+        semilogx(nuStars,flowCoefficients(3,:),'.-.r')
+        semilogx(nuStars,flowCoefficients(4,:),'.:m')
         xlabel('\nu_*')
-        title('Ion coefficient \alpha')
+        title('flow coefficient k_{||}')
         xlim([nuStarMin,nuStarMax])
-        legend('Sauter','me: base case','me: 2x N\theta','me: 2x N\xi','me: 2x Nx','Location','northwest')
+        legend('Sauter','me: base case','me: 2x N\theta','me: 2x N\xi','me: 2x Nx')
         
         subplot(numRows,numCols,2)
         semilogx(nuStarsFine, SauterConductivity,'k')
@@ -1553,7 +1595,7 @@ end
         xlabel('\nu_*')
         title('conductivity / Spitzer')
         xlim([nuStarMin,nuStarMax])
-        legend('Sauter','me: base case','me: 2x N\theta','me: 2x N\xi','me: 2x Nx','Location','northwest')
+        legend('Sauter','me: base case','me: 2x N\theta','me: 2x N\xi','me: 2x Nx')
         
         subplot(numRows,numCols,3)
         semilogx(nuStarsFine, SauterL31,'k')
@@ -1565,7 +1607,7 @@ end
         xlabel('\nu_*')
         title('L_{31}')
         xlim([nuStarMin,nuStarMax])
-        legend('Sauter','me: base case','me: 2x N\theta','me: 2x N\xi','me: 2x Nx','Location','northeast')
+        legend('Sauter','me: base case','me: 2x N\theta','me: 2x N\xi','me: 2x Nx')
         
         subplot(numRows,numCols,4)
         semilogx(nuStarsFine, SauterL32,'k')
@@ -1577,7 +1619,7 @@ end
         xlabel('\nu_*')
         title('L_{32}')
         xlim([nuStarMin,nuStarMax])
-        legend('Sauter','me: base case','me: 2x N\theta','me: 2x N\xi','me: 2x Nx','Location','southeast')
+        legend('Sauter','me: base case','me: 2x N\theta','me: 2x N\xi','me: 2x Nx')
         
         subplot(numRows,numCols,5)
         semilogx(nuStarsFine, SauterL34,'k')
@@ -1589,7 +1631,7 @@ end
         xlabel('\nu_*')
         title('L_{34}')
         xlim([nuStarMin,nuStarMax])
-        legend('Sauter','me: base case','me: 2x N\theta','me: 2x N\xi','me: 2x Nx','Location','northeast')
+        legend('Sauter','me: base case','me: 2x N\theta','me: 2x N\xi','me: 2x Nx')
         
         
     end
