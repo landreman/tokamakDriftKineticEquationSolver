@@ -1,0 +1,42 @@
+Local tokamak drift-kinetic equation solver
+Original version written 2012 by Matt Landreman, MIT Plasma Science & Fusion Center
+***********************************************************************************
+
+This program requires PETSc. For information about installing PETSc, see 
+http://www.mcs.anl.gov/petsc/
+This code was developed and tested using PETSc version 3.3-p2, and may or may 
+not be compatible with other versions.
+
+To compile, you must have the environment variables PETSC_DIR and PETSC_ARCH set.
+This can be done using e.g.
+export PETSC_DIR=/home/johndoe/petsc-3.3-p2
+export PETSC_ARCH=arch-linux2-c-debug
+making whichever substitutions are appropriate for your system.  These commands
+could be included in your .bashrc file for convenience.
+
+For improved speed, it is recommended that you turn off debugging and add 
+optimization flags when building PETSc.  This can be done by adding the flags
+--with-debugging=0 --COPTFLAGS=-O3 --FOPTFLAGS=-O3
+when running PETSc's configure utility.  It is also recommended that you build
+PETSc with shared rather than static libraries, since the resulting executable
+file is then much smaller.  This is done by adding the flag
+--with-shared-libraries
+when running PETSc's configure utility.
+
+To build the drift-kinetic solver, type
+make all
+
+Options are set by editing the file input.namelist.
+
+To run the code, type
+./tokamakDriftKineticEquationSolver
+
+To clean up old files, use
+make cleaner
+rather than
+make clean
+since the former also cleans up subdirectories and output files, whereas the latter
+is set by PETSc to only clean up .o and .mod files in the main directory.
+
+To plot results of a convergence scan, you may use the Matlab script
+plotFortranConvergenceScanOfTokamakDKESolver.m

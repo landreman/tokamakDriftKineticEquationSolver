@@ -1,0 +1,17 @@
+# Makefile for the local tokamak drift-kinetic solver
+
+include ${PETSC_DIR}/conf/variables
+include ${PETSC_DIR}/conf/rules
+
+OBJS = dfftf1.o  dffti1.o  dradf2.o  dradf4.o  dradfg.o radf3.o  radf5.o  rfftf1.o  rffti1.o \
+	dfftf.o   dffti.o   dradf3.o  dradf5.o radf2.o radf4.o  radfg.o  rfftf.o   rffti.o
+
+all: $(OBJS)
+	ar rcs fftpack.a $(OBJS)
+	rm *.o
+
+%.o: %.f
+	$(FLINKER) -c $<
+
+cleaner:
+	rm -f *.o *.a

@@ -9,9 +9,18 @@ The codes in this repository implement the algorithms discussed in the following
 
 The versions in this repository that use a Fourier modal discretization in theta demonstrate somewhat better convergence in this coordinate than the versions that use finite differencing in theta. This advantage can be important when the collisionality is low so very high resolution is required.  However, the versions that use finite differencing in theta are shorter and easier to understand.
 
-Several options are available for the magnetic geometry:
+Several options are available for the magnetic geometry in the Matlab codes:
   1. A circular concentric flux surface model
   2. Miller geometry
   3. Reading an eqdsk/EFIT g file
+The third option is not yet available in the fortran versions.
 
 All codes in this repository implement the full linearized Fokker-Planck collision operator.
+
+The fortran versions rely on the [PETSc library](http://www.mcs.anl.gov/petsc/). The makefiles may need to be adapted to link to PETSc libraries on your computing system.
+
+At the moment, the Matlab versions compute both ion and electron quantities, while the fortran versions compute only the ion quantities. It is straightforward to add the electron quantities to the fortran versions - I just haven't got around to it.  If you would like such a version, send me an email at matt dot landreman at gmail dot com.
+
+I have other versions of these codes available that use different discretizations in the speed and pitch-angle coordinates. If you are interested in these versions, send me an email.
+
+Versions that allow for multiple ion species will be uploaded soon...

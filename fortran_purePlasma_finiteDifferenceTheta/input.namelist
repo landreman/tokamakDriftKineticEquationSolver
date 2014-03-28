@@ -1,0 +1,132 @@
+&parameters
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  ! Options for program flow control:
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  programMode = 1
+  ! Options for 'programMode':
+  ! 1 = Solve for a single set of numerical parameters.
+  ! 2 = Scan the numerical parameters to test for convergence, keeping the physics parameters fixed.
+  
+  convergenceScanFilename = "dkeConvergence.dat"
+
+  ! If the following switch is set to true, a Matlab m-file is created which
+  ! stores the matrix, right-hand side, and solution vector.  If an iterative solver is used,
+  ! the preconditioner matrix is also saved.
+!  saveMatlabOutput = .true.
+  saveMatlabOutput = .false.
+
+  MatlabOutputFilename = "dke.m"
+
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  ! Physics parameters:
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  ! 'epsil' is the inverse aspect ratio:
+  epsil = 0.315
+ 
+  ! nuPrime = nu_ii * q * R_0 / v_i where v_i = sqrt(2 * T_i / m_i)
+  ! nuPrime = nu_* * epsil^(3/2)
+  nuPrime = 0.3
+ 
+  geometryToUse = 1
+  ! Options for geometryToUse:
+  ! 0: Circular concentric flux surface model:
+  !    B = B0/(1 + epsilon*cos(theta))
+  !    b dot grad theta = constant.
+  !    
+  ! 1: Miller geometry
+  !
+  ! 2: B = B0 * (1 + epsilon * cos(theta)),  
+  !    B dot grad theta \propto B^2.
+  !    In this scheme, theta is the Boozer angle.  
+ 
+  ! Miller parameters: (these are only used when geometryToUse = 1.)
+  Miller_kappa = 1.66
+  Miller_delta = 0.416
+  Miller_s_delta = 1.37
+  Miller_s_kappa = 0.70
+  Miller_dRdr = -0.354
+  Miller_q = 3.03
+  ! The inverse aspect ratio epsil is also used for Miller geometry.
+  
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  ! Numerical resolution parameters:
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  thetaDerivativeScheme = 2
+  ! Options for thetaDerivativeScheme:
+  ! 0 = Spectral collocation
+  ! 1 = 2nd order finite differences (3-point stencil)
+  ! 2 = 4th order finite differences (5-point stencil)
+
+  ! For each set of 4 numbers below, the first is the value used in a single run.
+  ! The second and third numbers set the range by which the first number is scaled
+  ! in a convergence scan. The fourth number sets the number of values tried in a
+  ! convergence scan. The code attempts to space the values evenly in a logarithmic
+  ! sense, as in Matlab's 'logspace' function. For example, the following settings
+  ! Ntheta = 6
+  ! NthetaMinFactor = 0.5
+  ! NthetaMaxFactor = 2.0
+  ! NthetaNumRuns = 3
+  ! would mean the values Ntheta = 3, 6, and 12 would be tried in a scan.
+  ! If you don't want to scan a variable in a convergence scan, set the associated
+  ! xxxNumRuns parameter to 0.
+  
+  Ntheta = 17
+  NthetaMinFactor = 0.8
+  NthetaMaxFactor = 2.0
+  NthetaNumRuns = 7
+
+  Nxi = 25
+  NxiMinFactor = 0.8
+  NxiMaxFactor = 2.0
+  NxiNumRuns = 7
+  
+  NL = 4
+  NLMinFactor = 0.5
+  NLMaxFactor = 2.0
+  NLNumRuns = 3
+  
+  Nx = 7
+  NxMinFactor = 0.5
+  NxMaxFactor = 2.0
+  NxNumRuns = 6
+
+  NxPotentialsPerVth = 40d+0
+  NxPotentialsPerVthMinFactor = 0.3
+  NxPotentialsPerVthMaxFactor = 2.0
+  NxPotentialsPerVthNumRuns = 5
+  
+  xMax = 5.
+  xMaxMinFactor = 0.5
+  xMaxMaxFactor = 2.0
+  xMaxNumRuns = 6
+
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  ! Other numerical parameters:
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ 
+  ! If 'useIterativeSolver' is set to false, PETSc's built-in sparse direct solver
+  ! will be used. The direct solver is faster for small problems and always yields a solution.
+  ! For large problems, the iterative solver may be faster, but it may not always converge.
+  
+!  useIterativeSolver = .true.
+  useIterativeSolver = .false.
+
+  whichParallelSolverToFactorPreconditioner = 1
+  ! Options for whichParallelSolverToFactorPreconditioner:
+  ! 1 = use mumps if it is detected, otherwise use superlu_dist
+  ! 2 = force use of superlu_dist, if it is available
+  !
+  ! The value of whichParallelSolverToFactorPreconditioner is only used when the code is run with 
+  ! more MPI processors than runs desired (1 if a single run, or more if a convergence scan.)
+  ! Otherwise, matrices are not distributed across processors, so the PETSc built-in serial sparse
+  ! direct solver is used to factor the preconditioner.
+
+  ! The parameter below has no effect when the direct solver is used.
+  ! When the iterative solver is used, sometimes a value of 1 works
+  ! better than zero.
+  multipleOfNuPrimeToAddOnDiagonalOfPreconditioner = 1d+0
+
+/
