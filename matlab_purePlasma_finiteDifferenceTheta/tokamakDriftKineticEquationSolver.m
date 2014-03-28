@@ -44,7 +44,7 @@ runMode = 0;
 %     does not take significant time.
 
 % The following parameter specifies the file to plot when runMode = 3:
-dataFileToPlot = 'tokamakDriftKineticEquationSolver_2014-03-27_18-24_foobar.mat';
+dataFileToPlot = 'tokamakDriftKineticEquationSolver_2014-03-27_18-17_foobar.mat';
 
 % The switch below determines whether an output file is created when runMode = 2:
 saveStuff = true;
@@ -145,7 +145,7 @@ nuPrime = 0.3;
 
 nuStar = nuPrime * (Miller_A^1.5);
 
-% Notice that this definition of nu_*i is identical to Sauter's,
+% Notice that this definition of nu_{*i} is identical to Sauter's,
 % but nu_{*e}^{Sauter} = sqrt(2) * nu_{*e}^{here}.
 
 
@@ -218,8 +218,8 @@ forceThetaParity = 1;
 tryIterativeSolvers = false;
 % If false, the sparse direct solver will be used.
 
-tryDirectSolverIfIterativeSolversFail = true;
-%tryDirectSolverIfIterativeSolversFail = false;
+%tryDirectSolverIfIterativeSolversFail = true;
+tryDirectSolverIfIterativeSolversFail = false;
 
 % The setting below determines the order of iterative solvers to try:
 orderOfSolversToTry = [1, 3];
@@ -241,8 +241,8 @@ restart = 100;
 % (associated with Lagrange multipliers) so the linear system remains
 % square.  It seems to make little difference whether or not these
 % constraints are included.
-%includeConstraints = true;
-includeConstraints = false;
+includeConstraints = true;
+%includeConstraints = false;
 
 %******************************************************************
 % Switches for plotting:
@@ -796,7 +796,7 @@ end
             % Miller: too hard to analytically differentiate b(theta) so do
             % it numerically:
             scheme = 20;
-            [thetaFine, ~, ddthetaFine, ~] = m20121125_04_DifferentiationMatricesForUniformGrid(Ntheta*dBdthetaResolutionMultiplier, 0, 2*pi, scheme);
+            [thetaFine, ~, ddthetaFine, ~] = differentiationMatricesForUniformGrid(Ntheta*dBdthetaResolutionMultiplier, 0, 2*pi, scheme);
             dbdthetaFine = ddthetaFine * b(thetaFine);
             dbdthetas = dbdthetaFine(1:dBdthetaResolutionMultiplier:end)';
         else
@@ -1289,9 +1289,9 @@ end
             avgVParB = (1/VPrime) * thetaWeights * (flowDividedByB .* bs .* oneOverqRbDotGradTheta(theta))';
             q= sqrt(2*Miller_A/pi)/(nuPrime*VPrime) * thetaWeights * qBeforeZetaIntegral;
             particleFlux= sqrt(2*Miller_A/pi)/(nuPrime*VPrime) * thetaWeights * particleFluxBeforeZetaIntegral;
-            fprintf('Normalized radial heat flux k_q: %g\n',q)
-            fprintf('Normalized radial particle flux: %g  (It should be << 1.)\n',particleFlux)
-            fprintf('Parallel flow coefficient k_||: %g\n',k)
+            fprintf('Normalized radial ion heat flux k_q: %g\n',q)
+            fprintf('Normalized radial ion particle flux: %g  (It should be << 1.)\n',particleFlux)
+            fprintf('Parallel ion flow coefficient k_||: %g\n',k)
             %fprintf('Parallel flow coefficient k_||: %g,   <V_|| B>: %g\n',k, avgVParB)
             fprintf('Poloidal variation of k_||: %g  (It should be << 1.)\n', max(abs(k-flowDividedByB)))
             

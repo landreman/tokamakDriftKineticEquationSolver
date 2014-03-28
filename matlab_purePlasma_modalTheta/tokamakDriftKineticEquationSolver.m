@@ -145,7 +145,7 @@ nuPrime = 0.3;
 
 nuStar = nuPrime * (Miller_A^1.5);
 
-% Notice that this definition of nu_*i is identical to Sauter's,
+% Notice that this definition of nu_{*i} is identical to Sauter's,
 % but nu_{*e}^{Sauter} = sqrt(2) * nu_{*e}^{here}.
 
 
@@ -205,8 +205,8 @@ log10tols = 4.5:0.5:5;
 tryIterativeSolvers = false;
 % If false, the sparse direct solver will be used.
 
-tryDirectSolverIfIterativeSolversFail = true;
-%tryDirectSolverIfIterativeSolversFail = false;
+%tryDirectSolverIfIterativeSolversFail = true;
+tryDirectSolverIfIterativeSolversFail = false;
 
 % The setting below determines the order of iterative solvers to try:
 orderOfSolversToTry = [1, 3];
@@ -1201,9 +1201,9 @@ end
             
             q= sqrt(2*Miller_A/pi)/(nuPrime*VPrime) * 2*pi * qBeforeZetaIntegral(1);
             particleFlux= sqrt(2*Miller_A/pi)/(nuPrime*VPrime) * 2*pi * particleFluxBeforeZetaIntegral(1);
-            fprintf('Normalized radial heat flux k_q: %g\n',q)
-            fprintf('Normalized radial particle flux: %g  (It should be << 1.)\n',particleFlux)
-            fprintf('Parallel flow coefficient k_||: %g\n',k)
+            fprintf('Normalized radial ion heat flux k_q: %g\n',q)
+            fprintf('Normalized radial ion particle flux: %g  (It should be << 1.)\n',particleFlux)
+            fprintf('Parallel ion flow coefficient k_||: %g\n',k)
             %fprintf('Parallel flow coefficient k_||: %g,   <V_|| B>: %g\n',k, avgVParB)
             fprintf('max non-constant mode coefficient of k_||: %g  (It should be << 1.)\n', max(abs(flowDividiedByB(2:end))))
             
