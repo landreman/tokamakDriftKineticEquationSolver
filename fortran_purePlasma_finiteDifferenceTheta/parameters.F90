@@ -43,7 +43,7 @@ module parameters
   ! Numerical input parameters:
 
   integer :: thetaDerivativeScheme = 0
-  ! 0 = spectral colocation
+  ! 0 = spectral collocation
   ! 1 = 2nd order finite differences
   ! 2 = 4th order dinite differences
 

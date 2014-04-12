@@ -1,6 +1,6 @@
 function [x, ddx, d2dx2, weights] = spectralNodesWeightsAndDifferentiationMatricesForV(N, k, scale, pointAtZero)
 % Computes the abscissae (i.e. grid points), Gaussian integration weights,
-% and spectral colocation differentiation matrices for functions on the
+% and spectral collocation differentiation matrices for functions on the
 % domain [0, Inf] which behave roughly as exp(-x^2) for large x.
 %
 % Written by Matt Landreman - July 6, 2012

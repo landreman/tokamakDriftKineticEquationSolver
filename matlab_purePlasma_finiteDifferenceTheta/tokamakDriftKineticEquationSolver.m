@@ -662,7 +662,7 @@ switch runMode
             otherwise
                 error('Program should not get here')
         end
-        stringForTop=sprintf('%s, %s, aspect ratio = %g, nuPrime = %g, nu_* = %g, thetaGridMode = %d, Legendre modal, polynomial colocation in x',speciesText,geometryText,Miller_A, nuPrime,nuStar,thetaGridMode);
+        stringForTop=sprintf('%s, %s, aspect ratio = %g, nuPrime = %g, nu_* = %g, thetaGridMode = %d, Legendre modal, polynomial collocation in x',speciesText,geometryText,Miller_A, nuPrime,nuStar,thetaGridMode);
         annotation('textbox',[0 0.95 1 .05],'HorizontalAlignment','center',...
             'Interpreter','none','VerticalAlignment','bottom',...
             'FontSize',10,'LineStyle','none','String',stringForTop);
@@ -827,21 +827,21 @@ end
         scale=1;
         pointAtZero=false;
         [x, ddx, d2dx2, xWeights] = spectralNodesWeightsAndDifferentiationMatricesForV(Nx, kk, scale, pointAtZero);
-        x_i = x(:)';
+        x = x(:)';
         xWeights = xWeights(:)';
         
         function y=weight(xxx)
             y=exp(-xxx.*xxx);
         end
         
-        xMax=max([5, max(x_i)]);
+        xMax=max([5, max(x)]);
         NxPotentials = ceil(xMax * NxPotentialsPerVth);
         % Uniform, higher order FD
         xMin=0;
         scheme = 12;
         [xPotentials, ~, ddxPotentials, d2dx2Potentials] = differentiationMatricesForUniformGrid(NxPotentials, xMin, xMax, scheme);
-        regridPolynomialToUniform = polynomialInterpolationMatrix(x_i,xPotentials,weight(x_i),weight(xPotentials));
-        regridUniformToPolynomial = makeHighOrderInterpolationMatrix(xPotentials,x_i,0,'f');
+        regridPolynomialToUniform = polynomialInterpolationMatrix(x,xPotentials,weight(x),weight(xPotentials));
+        regridUniformToPolynomial = makeHighOrderInterpolationMatrix(xPotentials,x,0,'f');
         
         
         if plotVelocitySpaceGrid
@@ -852,7 +852,7 @@ end
             end
             plot(xPotentials,zeros(size(xPotentials))+iteration,'.r')
             hold on
-            plot(x_i, zeros(size(x_i))+iteration,'o')
+            plot(x, zeros(size(x))+iteration,'o')
             title('Speed grid for distribution function (blue) and Rosenbluth potentials(red)')
             xlabel('x')
             ylabel('Solve number')
@@ -891,9 +891,9 @@ end
         % 3 = L34
         % 4 = conductivity
         
-        x2=x_i.*x_i;
+        x2=x.*x;
         expx2=exp(-x2);
-        xPartOfRHSForConductivity = x_i.*expx2;
+        xPartOfRHSForConductivity = x.*expx2;
         xPartOfRHSForP = x2.*expx2;
         xPartOfRHSForT = (x2-5/2).*x2.*expx2;
         
@@ -960,7 +960,6 @@ end
             thetaPartOfMirrorTerm = -0.5*dbdthetas./bs;
             for ix=1:Nx
                 
-                x=x_i(ix);
                 for L=0:(Nxi-1)
                     rowIndices = (ix-1)*Nxi*Ntheta + L*Ntheta + (1:Ntheta);
                     
@@ -968,18 +967,18 @@ end
                     if L<(Nxi-1) 
                         colIndices = rowIndices + Ntheta;
                         % Streaming term
-                        addSparseBlock(rowIndices, colIndices, x*ddthetaForThisMatrix*(L+1)/(2*L+3));
+                        addSparseBlock(rowIndices, colIndices, x(ix)*ddthetaForThisMatrix*(L+1)/(2*L+3));
                         % Mirror term
-                        addToSparse(rowIndices, colIndices, x*thetaPartOfMirrorTerm*(L+1)*(L+2)/(2*L+3));
+                        addToSparse(rowIndices, colIndices, x(ix)*thetaPartOfMirrorTerm*(L+1)*(L+2)/(2*L+3));
                     end
                     
                     % Sub-diagonals: (streaming & mirror terms)
                     if L>0
                         colIndices = rowIndices - Ntheta;
                         % Streaming term
-                        addSparseBlock(rowIndices, colIndices, x*ddthetaForThisMatrix*L/(2*L-1));
+                        addSparseBlock(rowIndices, colIndices, x(ix)*ddthetaForThisMatrix*L/(2*L-1));
                         % Mirror term
-                        addToSparse(rowIndices, colIndices, -x*thetaPartOfMirrorTerm*(L-1)*L/(2*L-1));
+                        addToSparse(rowIndices, colIndices, -x(ix)*thetaPartOfMirrorTerm*(L-1)*L/(2*L-1));
                     end
                 end
             end
@@ -995,11 +994,11 @@ end
             M32 = -2*diag(xWith0s.^2);
             LaplacianTimesX2WithoutL = diag(xPotentials.^2)*d2dx2Potentials + 2*diag(xPotentials)*ddxPotentials;
             
-            erfs=erf(x_i);
-            x2 = x_i.*x_i;
-            x3 = x2.*x_i;
-            expx2 = exp(-x_i.*x_i);
-            Psi = (erfs - 2/sqrtpi*x_i .* expx2) ./ (2*x_i.*x_i);
+            erfs=erf(x);
+            x2 = x.*x;
+            x3 = x2.*x;
+            expx2 = exp(-x2);
+            Psi = (erfs - 2/sqrtpi*x .* expx2) ./ (2*x2);
             switch species
                 case 0
                     % Ions
@@ -1010,8 +1009,8 @@ end
                 otherwise
                     error('Invalid setting for species')
             end
-            PsiPrime = (-erfs + 2/sqrtpi*x_i.*(1+x_i.*x_i) .* expx2) ./ x3;
-            xPartOfCECD = 3*sqrtpi/4*(diag(Psi./x_i)*d2dx2   +  diag((PsiPrime.*x_i  + Psi + 2*Psi.*x2)./x2)*ddx + diag(2*PsiPrime + 4*Psi./x_i)) + 3*diag(expx2);
+            PsiPrime = (-erfs + 2/sqrtpi*x.*(1+x2) .* expx2) ./ x3;
+            xPartOfCECD = 3*sqrtpi/4*(diag(Psi./x)*d2dx2   +  diag((PsiPrime.*x  + Psi + 2*Psi.*x2)./x2)*ddx + diag(2*PsiPrime + 4*Psi./x)) + 3*diag(expx2);
             M12IncludingX0 = nuPrime * 3/(2*pi)*diag(expx2)*regridUniformToPolynomial;
             M13IncludingX0 = -nuPrime * 3/(2*pi) * diag(x2.*expx2) * regridUniformToPolynomial* d2dx2Potentials;
             
@@ -1163,11 +1162,11 @@ end
             density = zeros(1,itheta);
             pressure = zeros(1,itheta);
             
-            particleFluxIntegralWeight = (x_i.^4);
-            qIntegralWeight = (x_i.^6);
-            kIntegralWeight = (x_i.^3);
-            densityIntegralWeight = 4/sqrtpi*(x_i.*x_i);
-            pressureIntegralWeight = 4/sqrtpi*(x_i.^4);
+            particleFluxIntegralWeight = (x.^4);
+            qIntegralWeight = (x.^6);
+            kIntegralWeight = (x.^3);
+            densityIntegralWeight = 4/sqrtpi*(x.*x);
+            pressureIntegralWeight = 4/sqrtpi*(x.^4);
             for itheta=1:Ntheta
                 L=0;
                 indices = ((1:Nx)-1)*Nxi*Ntheta + L*Ntheta + itheta;
@@ -1213,7 +1212,7 @@ end
         else
             % Electrons
             
-            kIntegralWeight = (x_i.^3);
+            kIntegralWeight = (x.^3);
             
             % Compute L31:
             L31BeforeThetaIntegral = zeros(Ntheta,1);

@@ -9,7 +9,7 @@
     subroutine printGreeting()
       print *,"****************************************************************************"
       print *,"Local tokamak drift-kinetic equation solver."
-      print *,"Fourier modal in theta, Legendre modal in xi, polynomial spectral colocation in x."
+      print *,"Fourier modal in theta, Legendre modal in xi, polynomial spectral collocation in x."
 #if defined(PETSC_USE_REAL_SINGLE)
       print *,"Using single precision."
 #else
